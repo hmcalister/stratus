@@ -26,7 +26,7 @@ type clientIPContextKey struct{}
 //	mux := http.NewServeMux()
 //	api := humago.New(mux, huma.DefaultConfig("My API", "1.0.0"))
 //	service.Register(api)
-func (s *AuthService) HumaRegister(api huma.API) {
+func (s *AuthService) RegisterHumaHandlers(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "auth-request-link",
 		Method:        http.MethodPost,

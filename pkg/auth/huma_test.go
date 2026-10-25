@@ -20,7 +20,7 @@ func newHumaTestMux(t *testing.T) (*testService, http.Handler) {
 	ts := newTestService(t)
 	mux := http.NewServeMux()
 	api := humago.New(mux, huma.DefaultConfig("test", "1.0.0"))
-	ts.service.HumaRegister(api)
+	ts.service.RegisterHumaHandlers(api)
 	return ts, mux
 }
 
