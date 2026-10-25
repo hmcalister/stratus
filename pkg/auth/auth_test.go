@@ -45,16 +45,22 @@ type testService struct {
 
 func newTestService(t *testing.T) *testService {
 	t.Helper()
+	return newTestServiceWithRateLimit(t, RateLimitConfig{})
+}
+
+func newTestServiceWithRateLimit(t *testing.T, rateLimit RateLimitConfig) *testService {
+	t.Helper()
 
 	clock := newFakeClock()
 	sender := &fakeSender{}
 	store := sessionstore.NewMemorySessionStore()
 
 	service, err := New(AuthServiceConfig{
-		Sender:   sender,
-		Sessions: store,
-		BaseURL:  "https://example.com",
-		Now:      clock.now,
+		Sender:    sender,
+		Sessions:  store,
+		BaseURL:   "https://example.com",
+		RateLimit: rateLimit,
+		Now:       clock.now,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -286,6 +292,96 @@ func TestRequestLinkRateLimitsAddress(t *testing.T) {
 	}
 	if got := len(ts.sender.sent()); got != defaultEmailLinkBurst {
 		t.Fatalf("%d messages sent, want %d", got, defaultEmailLinkBurst)
+	}
+}
+
+func TestRateLimitDefaults(t *testing.T) {
+	ts := newTestService(t)
+
+	want := RateLimitConfig{
+		EmailBurst:    defaultEmailLinkBurst,
+		EmailInterval: defaultEmailLinkInterval,
+		IPBurst:       defaultIPLinkBurst,
+		IPInterval:    defaultIPLinkInterval,
+	}
+	if got := ts.service.cfg.RateLimit; got != want {
+		t.Fatalf("RateLimit = %+v, want %+v", got, want)
+	}
+}
+
+func TestRequestLinkUsesConfiguredRateLimit(t *testing.T) {
+	ts := newTestServiceWithRateLimit(t, RateLimitConfig{
+		EmailBurst:    2,
+		EmailInterval: time.Minute,
+	})
+
+	for i := range 2 {
+		if err := ts.service.RequestLink(t.Context(), "user@example.com"); err != nil {
+			t.Fatalf("request %d: %v", i+1, err)
+		}
+	}
+
+	err := ts.service.RequestLink(t.Context(), "user@example.com")
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("RequestLink error = %v, want ErrRateLimited", err)
+	}
+
+	ts.clock.advance(time.Minute)
+
+	if err := ts.service.RequestLink(t.Context(), "user@example.com"); err != nil {
+		t.Fatalf("RequestLink after refill: %v", err)
+	}
+}
+
+func TestRequestLinkAppliesConfiguredIPLimit(t *testing.T) {
+	ts := newTestServiceWithRateLimit(t, RateLimitConfig{
+		IPBurst:    1,
+		IPInterval: time.Hour,
+	})
+
+	if err := ts.service.requestLink(t.Context(), "one@example.com", "203.0.113.7"); err != nil {
+		t.Fatalf("first request: %v", err)
+	}
+
+	err := ts.service.requestLink(t.Context(), "two@example.com", "203.0.113.7")
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("second request error = %v, want ErrRateLimited", err)
+	}
+}
+
+func TestRequestLinkRateLimitDisabled(t *testing.T) {
+	ts := newTestServiceWithRateLimit(t, RateLimitConfig{Disabled: true})
+
+	for i := range defaultEmailLinkBurst + 1 {
+		if err := ts.service.RequestLink(t.Context(), "user@example.com"); err != nil {
+			t.Fatalf("request %d: %v", i+1, err)
+		}
+	}
+}
+
+func TestNewRejectsNegativeRateLimits(t *testing.T) {
+	tests := []struct {
+		name      string
+		rateLimit RateLimitConfig
+	}{
+		{"email burst", RateLimitConfig{EmailBurst: -1}},
+		{"email interval", RateLimitConfig{EmailInterval: -time.Second}},
+		{"ip burst", RateLimitConfig{IPBurst: -1}},
+		{"ip interval", RateLimitConfig{IPInterval: -time.Second}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := New(AuthServiceConfig{
+				Sender:    &fakeSender{},
+				Sessions:  sessionstore.NewMemorySessionStore(),
+				BaseURL:   "https://example.com",
+				RateLimit: test.rateLimit,
+			})
+			if err == nil {
+				t.Fatal("New succeeded, want error")
+			}
+		})
 	}
 }
 
