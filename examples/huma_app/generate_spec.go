@@ -42,7 +42,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	api := humago.New(mux, huma.DefaultConfig("Stratus example", "1.0.0"))
-	service.HumaRegister(api)
+	service.RegisterHumaHandlers(api)
 
 	if err := dumpOpenAPI(api, os.Stdout); err != nil {
 		log.Fatal(err)

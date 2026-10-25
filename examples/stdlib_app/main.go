@@ -45,7 +45,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/auth/", service.Handlers())
+	mux.Handle("/auth/", service.AuthHandlers())
 	mux.Handle("GET /", service.RequireAuth(http.HandlerFunc(privateRouteHandleFunc)))
 
 	log.Printf("listening on %s", baseURL)

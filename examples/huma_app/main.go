@@ -76,7 +76,7 @@ func main() {
 	}, privateRouteHandleFunc)
 
 	// Register Auth routes
-	service.HumaRegister(api)
+	service.RegisterHumaHandlers(api)
 
 	log.Printf("listening on %s", baseURL)
 	if err := http.ListenAndServe(addr, mux); err != nil {
