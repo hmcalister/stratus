@@ -10,7 +10,9 @@ import (
 
 // Returns a ClientIP function for an app behind a reverse proxy. Pass it as AuthServiceConfig.ClientIP.
 //
-// The X-Forwarded-For header is read only when the immediate peer is inside one of trustedProxies. The header is then read from right to left, skipping addresses inside trustedProxies, and the first untrusted address is returned. When the header is absent or contains an address that cannot be parsed, the peer address is returned instead.
+// The X-Forwarded-For header is read only when the immediate peer is inside one of trustedProxies.
+// The header is then read from right to left, skipping addresses inside trustedProxies, and the first untrusted address is returned.
+// When the header is absent or contains an address that cannot be parsed, the peer address is returned instead.
 //
 // List only proxies that you control. If clients can reach the app without passing through them, they can forge the header.
 func TrustedProxyClientIP(trustedProxies []netip.Prefix) func(*http.Request) string {
