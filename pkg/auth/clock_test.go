@@ -21,9 +21,3 @@ func (c *fakeClock) now() time.Time {
 	defer c.mu.Unlock()
 	return c.current
 }
-
-func (c *fakeClock) advance(d time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.current = c.current.Add(d)
-}
