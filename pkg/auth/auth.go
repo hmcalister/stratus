@@ -150,7 +150,7 @@ func New(cfg AuthServiceConfig) (*AuthService, error) {
 		cfg.SuccessURL = "/"
 	}
 
-	cfg.Cookie = cfg.Cookie.withDefaults()
+	cfg.Cookie = cfg.Cookie.withDefaultConfig()
 	if err := cfg.Cookie.validate(); err != nil {
 		return nil, err
 	}
