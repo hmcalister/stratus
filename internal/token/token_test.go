@@ -2,6 +2,7 @@ package token
 
 import (
 	"encoding/hex"
+	"strings"
 	"testing"
 )
 
@@ -49,5 +50,32 @@ func TestHash(t *testing.T) {
 
 	if got := Hash("abc"); got != want {
 		t.Errorf("Hash = %q, want %q", got, want)
+	}
+}
+
+func TestValid(t *testing.T) {
+	rawToken, _, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		rawToken string
+		want     bool
+	}{
+		{name: "new token", rawToken: rawToken, want: true},
+		{name: "empty", rawToken: "", want: false},
+		{name: "too short", rawToken: rawToken[:len(rawToken)-1], want: false},
+		{name: "too long", rawToken: rawToken + "a", want: false},
+		{name: "oversized", rawToken: strings.Repeat("a", 1<<20), want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := Valid(test.rawToken); got != test.want {
+				t.Errorf("Valid(%d bytes) = %t, want %t", len(test.rawToken), got, test.want)
+			}
+		})
 	}
 }
