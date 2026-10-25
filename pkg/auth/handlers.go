@@ -30,8 +30,8 @@ const (
 //
 // The routes are absolute, so mount the handler without stripping a prefix. With the standard library mux:
 //
-//	mux.Handle("/auth/", service.Handlers())
-func (s *AuthService) Handlers() http.Handler {
+//	mux.Handle("/auth/", service.AuthHandlers())
+func (s *AuthService) AuthHandlers() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST "+magicLinkRequestPath, s.handleRequestLink)
 	mux.HandleFunc("GET "+magicLinkConsumePath, s.handleConsumeLink)

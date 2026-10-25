@@ -44,7 +44,7 @@ func TestHandlersRequestLinkFormAndJSON(t *testing.T) {
 			request.Header.Set("Content-Type", test.contentType)
 			recorder := httptest.NewRecorder()
 
-			ts.service.Handlers().ServeHTTP(recorder, request)
+			ts.service.AuthHandlers().ServeHTTP(recorder, request)
 
 			if recorder.Code != http.StatusAccepted {
 				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusAccepted)
@@ -113,7 +113,7 @@ func TestHandlersRequestLinkResponseIsUniform(t *testing.T) {
 			request.Header.Set("Content-Type", test.contentType)
 			recorder := httptest.NewRecorder()
 
-			ts.service.Handlers().ServeHTTP(recorder, request)
+			ts.service.AuthHandlers().ServeHTTP(recorder, request)
 
 			if recorder.Code != http.StatusAccepted {
 				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusAccepted)
@@ -130,7 +130,7 @@ func TestHandlersRequestLinkResponseIsUniform(t *testing.T) {
 
 func TestHandlersRequestLinkRateLimitResponseIsUniform(t *testing.T) {
 	ts := newTestService(t)
-	handler := ts.service.Handlers()
+	handler := ts.service.AuthHandlers()
 	body := url.Values{"email": {"user@example.com"}}.Encode()
 
 	for i := range defaultEmailLinkBurst {
@@ -169,7 +169,7 @@ func TestHandlersConsumeLinkSetsCookieAndRedirects(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, magicLinkConsumePath+"?token="+url.QueryEscape(token), nil)
 	recorder := httptest.NewRecorder()
 
-	ts.service.Handlers().ServeHTTP(recorder, request)
+	ts.service.AuthHandlers().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusFound {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusFound)
@@ -208,7 +208,7 @@ func TestHandlersConsumeInvalidLinkIsNeutral(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, magicLinkConsumePath+"?token="+url.QueryEscape(token), nil)
 			recorder := httptest.NewRecorder()
 
-			ts.service.Handlers().ServeHTTP(recorder, request)
+			ts.service.AuthHandlers().ServeHTTP(recorder, request)
 
 			if recorder.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
@@ -232,7 +232,7 @@ func TestHandlersLogoutClearsCookie(t *testing.T) {
 	request.AddCookie(sessionCookie)
 	recorder := httptest.NewRecorder()
 
-	ts.service.Handlers().ServeHTTP(recorder, request)
+	ts.service.AuthHandlers().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
@@ -264,7 +264,7 @@ func TestHandlersLogoutAllRevokesEverySession(t *testing.T) {
 	request.AddCookie(ts.service.sessionCookie(firstToken))
 	recorder := httptest.NewRecorder()
 
-	ts.service.Handlers().ServeHTTP(recorder, request)
+	ts.service.AuthHandlers().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
@@ -309,7 +309,7 @@ func TestHandlersLogoutAllRequiresSession(t *testing.T) {
 			}
 			recorder := httptest.NewRecorder()
 
-			ts.service.Handlers().ServeHTTP(recorder, request)
+			ts.service.AuthHandlers().ServeHTTP(recorder, request)
 
 			if recorder.Code != http.StatusUnauthorized {
 				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
@@ -344,7 +344,7 @@ func TestHandlersRejectWrongMethods(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.path, nil)
 			recorder := httptest.NewRecorder()
 
-			ts.service.Handlers().ServeHTTP(recorder, request)
+			ts.service.AuthHandlers().ServeHTTP(recorder, request)
 
 			if recorder.Code != http.StatusMethodNotAllowed {
 				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
@@ -356,7 +356,7 @@ func TestHandlersRejectWrongMethods(t *testing.T) {
 func TestHandlersFullFlow(t *testing.T) {
 	ts := newTestService(t)
 	mux := http.NewServeMux()
-	mux.Handle("/auth/", ts.service.Handlers())
+	mux.Handle("/auth/", ts.service.AuthHandlers())
 
 	var protectedIdentity Identity
 	mux.Handle("GET /private", ts.service.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
