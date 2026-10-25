@@ -2,6 +2,10 @@
 
 Minimal email magic-link authentication for Go applications.
 
+[![CI](https://github.com/hmcalister/stratus/actions/workflows/cicd.yml/badge.svg)](https://github.com/hmcalister/stratus/actions/workflows/cicd.yml)
+[![codecov](https://codecov.io/gh/hmcalister/stratus/branch/main/graph/badge.svg)](https://codecov.io/gh/hmcalister/stratus)
+[![Go Reference](https://pkg.go.dev/badge/github.com/hmcalister/stratus.svg)](https://pkg.go.dev/github.com/hmcalister/stratus)
+
 Stratus adds passwordless sign-in to an existing application. Your app just needs to construct an `auth.AuthService`, mounts its handlers, and wrap protected routes with `RequireAuth`. User profiles and their storage are left to the application to define, but may be indexed against `auth.Identity`. Sessions are stored in a `SessionStore` object, defaulting to an in-memory store (implementation provided).
 
 Email is managed by [`github.com/hmcalister/skysatchel`](https://github.com/hmcalister/skysatchel), a simple interface for mailing. A generic SMTP sender implementation is provided in that project for quickstarts.
