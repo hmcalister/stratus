@@ -99,3 +99,27 @@ func TestTrustedProxyClientIP(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoteAddrClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		want       string
+	}{
+		{name: "ipv4 with port", remoteAddr: "192.0.2.1:1234", want: "192.0.2.1"},
+		{name: "ipv6 with port", remoteAddr: "[2001:db8::1]:443", want: "2001:db8::1"},
+		{name: "without port", remoteAddr: "192.0.2.1", want: "192.0.2.1"},
+		{name: "empty", remoteAddr: "", want: ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/", nil)
+			request.RemoteAddr = test.remoteAddr
+
+			if got := remoteAddrClientIP(request); got != test.want {
+				t.Errorf("remoteAddrClientIP = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
