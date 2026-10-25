@@ -46,11 +46,11 @@ type AuthServiceConfig struct {
 	// Delivers magic-link emails. Required.
 	Sender skysender.Sender
 
-	// Builds the magic-link email for an address and its link.
+	// Builds the magic-link email.
 	//
 	// The message must include link, or the user cannot sign in.
 	// Defaults to a plain-text message with subject "Sign in to <host>" and body "Click to sign in: <link>".
-	LinkEmail func(address, link string) skysatchel.Message
+	LinkEmail func(link string) skysatchel.Message
 
 	// Persists issued sessions. Required.
 	//

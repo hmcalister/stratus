@@ -32,9 +32,9 @@ func TestLinkEmailIsConfigurable(t *testing.T) {
 		Sender:   sender,
 		Sessions: sessionstore.NewMemorySessionStore(),
 		BaseURL:  "https://example.com",
-		LinkEmail: func(address, link string) skysatchel.Message {
+		LinkEmail: func(link string) skysatchel.Message {
 			return skysatchel.Message{
-				Subject: "Welcome to Acme, " + address,
+				Subject: "Welcome to Example",
 				Body:    "Open this link: " + link,
 			}
 		},
@@ -49,7 +49,7 @@ func TestLinkEmailIsConfigurable(t *testing.T) {
 	}
 
 	messages := sender.sent()
-	if got, want := messages[0].Subject, "Welcome to Acme, user@example.com"; got != want {
+	if got, want := messages[0].Subject, "Welcome to Example"; got != want {
 		t.Errorf("Subject = %q, want %q", got, want)
 	}
 

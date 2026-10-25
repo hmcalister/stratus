@@ -32,8 +32,8 @@ func (s *AuthService) magicLinkURL(token string) string {
 }
 
 // Returns the default magic-link composer, which names the application in the subject.
-func defaultLinkEmail(appName string) func(address, link string) skysatchel.Message {
-	return func(_, link string) skysatchel.Message {
+func defaultLinkEmail(appName string) func(link string) skysatchel.Message {
+	return func(link string) skysatchel.Message {
 		return skysatchel.Message{
 			Subject: "Sign in to " + appName,
 			Body:    "Click to sign in: " + link,
@@ -44,7 +44,7 @@ func defaultLinkEmail(appName string) func(address, link string) skysatchel.Mess
 // Sends the magic-link email for address.
 func (s *AuthService) sendLink(ctx context.Context, address, link string) error {
 	err := s.cfg.Sender.Send(ctx, skysender.SendParams{
-		Message:      s.cfg.LinkEmail(address, link),
+		Message:      s.cfg.LinkEmail(link),
 		ToRecipients: []string{address},
 	})
 	if err != nil {
