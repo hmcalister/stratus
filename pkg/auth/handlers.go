@@ -12,6 +12,7 @@ const (
 	magicLinkRequestPath = "/auth/magic-link"
 	magicLinkConsumePath = "/auth/magic-link/consume"
 	logoutPath           = "/auth/logout"
+	logoutAllPath        = "/auth/logout-all"
 
 	maxRequestBodyBytes = 1 << 20
 
@@ -32,6 +33,7 @@ func (s *AuthService) Handlers() http.Handler {
 	mux.HandleFunc("POST "+magicLinkRequestPath, s.handleRequestLink)
 	mux.HandleFunc("GET "+magicLinkConsumePath, s.handleConsumeLink)
 	mux.HandleFunc("POST "+logoutPath, s.handleLogout)
+	mux.HandleFunc("POST "+logoutAllPath, s.handleLogoutAll)
 	return mux
 }
 
@@ -68,6 +70,23 @@ func (s *AuthService) handleConsumeLink(w http.ResponseWriter, r *http.Request) 
 // Revokes the session in the store and clears the cookie. It is safe to call without a session.
 func (s *AuthService) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if err := s.Logout(r.Context(), s.sessionTokenFromRequest(r)); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, s.clearSessionCookie())
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Revokes every session belonging to the session's owner and clears the cookie. Requests without a valid session receive 401 Unauthorized.
+func (s *AuthService) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
+	identity, err := s.ValidateSession(r.Context(), s.sessionTokenFromRequest(r))
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := s.LogoutAll(r.Context(), identity.Email); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
