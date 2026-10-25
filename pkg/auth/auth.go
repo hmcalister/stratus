@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	skysatchel "github.com/hmcalister/skysatchel/pkg/email"
 	"github.com/hmcalister/skysatchel/pkg/email/skysender"
 
 	"github.com/hmcalister/stratus/internal/linkstore"
@@ -44,6 +45,12 @@ type Identity struct {
 type AuthServiceConfig struct {
 	// Delivers magic-link emails. Required.
 	Sender skysender.Sender
+
+	// Builds the magic-link email for an address and its link.
+	//
+	// The message must include link, or the user cannot sign in.
+	// Defaults to a plain-text message with subject "Sign in to <host>" and body "Click to sign in: <link>".
+	LinkEmail func(address, link string) skysatchel.Message
 
 	// Persists issued sessions. Required.
 	//
@@ -155,6 +162,9 @@ func New(cfg AuthServiceConfig) (*AuthService, error) {
 		return nil, err
 	}
 
+	if cfg.LinkEmail == nil {
+		cfg.LinkEmail = defaultLinkEmail(parsedBaseURL.Host)
+	}
 	if cfg.ClientIP == nil {
 		cfg.ClientIP = remoteAddrClientIP
 	}
