@@ -21,14 +21,6 @@ import (
 const (
 	defaultLinkTTL    = 15 * time.Minute
 	defaultSessionTTL = 30 * 24 * time.Hour
-
-	// An address may make defaultEmailLinkBurst link requests immediately and then one per defaultEmailLinkInterval.
-	// A client IP gets defaultIPLinkBurst requests immediately and then one per defaultIPLinkInterval. Idle rate-limit buckets are forgotten every defaultLinkSweepCadence.
-	defaultEmailLinkBurst    = 5
-	defaultEmailLinkInterval = 3 * time.Minute
-	defaultIPLinkBurst       = 20
-	defaultIPLinkInterval    = 45 * time.Second
-	defaultLinkSweepCadence  = 15 * time.Minute
 )
 
 // Representative of an authenticated user.
@@ -81,6 +73,11 @@ type AuthServiceConfig struct {
 	//
 	// The zero value uses Path "/", SameSite=Lax, and a Secure cookie whenever BaseURL uses https.
 	Cookie CookieConfig
+
+	// Configures per-address and per-client-IP limits on link requests.
+	//
+	// The zero value uses the defaults documented on RateLimitConfig.
+	RateLimit RateLimitConfig
 
 	// Returns the client address used to rate limit link requests.
 	//
@@ -172,17 +169,28 @@ func New(cfg AuthServiceConfig) (*AuthService, error) {
 		cfg.Now = time.Now
 	}
 
+	rateLimit, err := cfg.RateLimit.withDefaults()
+	if err != nil {
+		return nil, err
+	}
+	cfg.RateLimit = rateLimit
+
+	var limiter *ratelimit.Limiter
+	if !rateLimit.Disabled {
+		limiter = ratelimit.New(ratelimit.Config{
+			EmailBurst:    rateLimit.EmailBurst,
+			EmailInterval: rateLimit.EmailInterval,
+			IPBurst:       rateLimit.IPBurst,
+			IPInterval:    rateLimit.IPInterval,
+			SweepCadence:  defaultLinkSweepCadence,
+		}, cfg.Now)
+	}
+
 	return &AuthService{
 		cfg:     cfg,
 		appName: parsedBaseURL.Host,
 		links:   linkstore.New(cfg.Now),
-		limiter: ratelimit.New(ratelimit.Config{
-			EmailBurst:    defaultEmailLinkBurst,
-			EmailInterval: defaultEmailLinkInterval,
-			IPBurst:       defaultIPLinkBurst,
-			IPInterval:    defaultIPLinkInterval,
-			SweepCadence:  defaultLinkSweepCadence,
-		}, cfg.Now),
+		limiter: limiter,
 	}, nil
 }
 
@@ -201,7 +209,7 @@ func (s *AuthService) requestLink(ctx context.Context, email, clientIP string) e
 		return err
 	}
 
-	if !s.limiter.Allow(address, clientIP) {
+	if s.limiter != nil && !s.limiter.Allow(address, clientIP) {
 		return ErrRateLimited
 	}
 
