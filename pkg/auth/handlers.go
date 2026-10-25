@@ -25,6 +25,9 @@ const (
 //	GET  /auth/magic-link/consume
 //	POST /auth/logout
 //
+// The paths are absolute and match the routes registered with the Huma config in this package,
+// so callers should mount one or the other, never both.
+//
 // The routes are absolute, so mount the handler without stripping a prefix. With the standard library mux:
 //
 //	mux.Handle("/auth/", service.Handlers())
