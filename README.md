@@ -158,7 +158,7 @@ Other methods return `405 Method Not Allowed`.
 
 ## Configuration
 
-`auth.AuthServiceConfig`:
+### `auth.AuthServiceConfig`:
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -170,10 +170,11 @@ Other methods return `405 Method Not Allowed`.
 | `SessionTTL` | `30 days` | How long a session remains valid. |
 | `SuccessURL` | `/` | Redirect target after a successful consume. |
 | `Cookie` | zero value | Session cookie settings. See below. |
+| `RateLimit` | zero value | Token-bucket limits on link requests. See below. |
 | `ClientIP` | `RemoteAddr` host | Returns the client IP address for rate limiting. Use `TrustedProxyClientIP` behind a reverse proxy. |
 | `Now` | `time.Now` | Clock for tests. |
 
-`auth.CookieConfig`:
+### `auth.CookieConfig`:
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -184,6 +185,18 @@ Other methods return `405 Method Not Allowed`.
 | `SameSite` | `Lax` | Cross-site sending policy. `Lax` keeps the post-consume redirect working. |
 
 `HttpOnly` is always set.
+
+### `auth.RateLimitConfig`:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `EmailBurst` | `5` | Link requests one address may make immediately. |
+| `EmailInterval` | `3m` | Time to restore one link request to an address's bucket. |
+| `IPBurst` | `20` | Link requests one client IP may make immediately. |
+| `IPInterval` | `45s` | Time to restore one link request to a client IP's bucket. |
+| `Disabled` | `false` | Turns off link-request rate limiting entirely. |
+
+A zero field keeps its default. Negative values make `auth.New` return an error.
 
 ### Customising the magic-link email
 
@@ -230,8 +243,26 @@ The service provides `RequestLink`, `ConsumeLink`, `ValidateSession`, `Logout`, 
 
 ### Rate limits
 
+By default:
+
 - One address: burst of 5 requests, then one request per 3 minutes.
 - One client IP: burst of 20 requests, then one request per 45 seconds.
+
+Override the defaults with `RateLimit`:
+
+```go
+service, err := auth.New(auth.AuthServiceConfig{
+	// ...
+	RateLimit: auth.RateLimitConfig{
+		EmailBurst:    3,
+		EmailInterval: 10 * time.Minute,
+		IPBurst:       100,
+		IPInterval:    10 * time.Second,
+	},
+})
+```
+
+Set `Disabled: true` to turn off link-request rate limiting, for example in tests. The per-IP limit applies only to the built-in HTTP and Huma handlers. `RequestLink` applies the per-address limit.
 
 A request denied by either limit spends no token from the other.
 
