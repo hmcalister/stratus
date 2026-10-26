@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,13 +11,6 @@ import (
 	"github.com/hmcalister/stratus/pkg/auth"
 	"github.com/hmcalister/stratus/pkg/sessionstore"
 )
-
-// A development-only dummy implementation of Sender.
-type dummySender struct{}
-
-func (dummySender) Send(_ context.Context, _ skysender.SendParams) error {
-	return nil
-}
 
 func privateRouteHandleFunc(w http.ResponseWriter, r *http.Request) {
 	identity, ok := auth.IdentityFromContext(r.Context())
@@ -35,7 +27,7 @@ func main() {
 	const addr = ":8080"
 
 	service, err := auth.New(auth.AuthServiceConfig{
-		Sender:     dummySender{},
+		Sender:     skysender.NoOpSender{},
 		Sessions:   sessionstore.NewMemorySessionStore(),
 		BaseURL:    baseURL,
 		SuccessURL: "/",

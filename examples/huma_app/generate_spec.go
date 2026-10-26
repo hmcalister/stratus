@@ -8,7 +8,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -23,16 +22,9 @@ import (
 	"github.com/hmcalister/stratus/pkg/sessionstore"
 )
 
-// A development-only dummy implementation of Sender.
-type dummySender struct{}
-
-func (dummySender) Send(_ context.Context, _ skysender.SendParams) error {
-	return nil
-}
-
 func main() {
 	service, err := auth.New(auth.AuthServiceConfig{
-		Sender:   dummySender{},
+		Sender:   skysender.NoOpSender{},
 		Sessions: sessionstore.NewMemorySessionStore(),
 		BaseURL:  "http://localhost:8080",
 	})
