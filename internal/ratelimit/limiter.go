@@ -61,8 +61,8 @@ func New(cfg Config, now func() time.Time) *Limiter {
 // It creates a missing bucket for each limit (address and IP).
 //
 // If both limits have a token, it removes one from each and returns true.
-// If either limit has no token, it returns false without spending from the other.
-func (l *Limiter) Allow(email, ip string) bool {
+// If either limit has no token, it returns false without spending from the other, along with the time until that limit allows another request.
+func (l *Limiter) Allow(email, ip string) (bool, time.Duration) {
 	now := l.now()
 
 	defer l.sweep(now)
@@ -73,8 +73,10 @@ func (l *Limiter) Allow(email, ip string) bool {
 	if emailBucket == nil {
 		emailBucket = newTokenBucket(l.emailBurst, l.emailInterval)
 	}
-	if emailBucket.durationUntilNextToken(now) > 0 {
-		return false
+	emailWait := emailBucket.durationUntilNextToken(now)
+	l.emailTokenBucketMap[email] = emailBucket
+	if emailWait > 0 {
+		return false, emailWait
 	}
 
 	if ip != "" {
@@ -82,16 +84,15 @@ func (l *Limiter) Allow(email, ip string) bool {
 		if ipBucket == nil {
 			ipBucket = newTokenBucket(l.ipBurst, l.ipInterval)
 		}
-		if ipBucket.durationUntilNextToken(now) > 0 {
-			return false
+		if ipWait := ipBucket.durationUntilNextToken(now); ipWait > 0 {
+			return false, ipWait
 		}
 		ipBucket.tokens--
 		l.ipTokenBucketMap[ip] = ipBucket
 	}
 
 	emailBucket.tokens--
-	l.emailTokenBucketMap[email] = emailBucket
-	return true
+	return true, 0
 }
 
 // Forgets buckets that are idle long enough to be back at full burst.

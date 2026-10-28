@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
@@ -156,6 +158,81 @@ func TestHandlersRequestLinkRateLimitResponseIsUniform(t *testing.T) {
 	}
 	if got := len(ts.sender.sent()); got != defaultEmailLinkBurst {
 		t.Fatalf("%d messages sent, want %d", got, defaultEmailLinkBurst)
+	}
+}
+
+// Posts a form-encoded link request and returns the response recorder.
+func postLinkForm(handler http.Handler, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodPost, magicLinkRequestPath, strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func TestHandlersRevealRateLimitDenial(t *testing.T) {
+	ts := newTestServiceWithRateLimit(t, RateLimitConfig{RevealDenials: true})
+	handler := ts.service.AuthHandlers()
+	body := url.Values{"email": {"user@example.com"}}.Encode()
+
+	for i := range defaultEmailLinkBurst {
+		if recorder := postLinkForm(handler, body); recorder.Code != http.StatusAccepted {
+			t.Fatalf("request %d: status = %d, want %d", i+1, recorder.Code, http.StatusAccepted)
+		}
+	}
+
+	recorder := postLinkForm(handler, body)
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusTooManyRequests)
+	}
+	// One token per interval, so the wait is that interval in whole seconds.
+	wantRetryAfter := strconv.Itoa(int(defaultEmailLinkInterval.Seconds()))
+	if got := recorder.Header().Get("Retry-After"); got != wantRetryAfter {
+		t.Errorf("Retry-After = %q, want %q", got, wantRetryAfter)
+	}
+	if got := recorder.Body.String(); got != rateLimitResponseBody {
+		t.Errorf("body = %q, want %q", got, rateLimitResponseBody)
+	}
+	if got := len(ts.sender.sent()); got != defaultEmailLinkBurst {
+		t.Errorf("%d messages sent, want %d", got, defaultEmailLinkBurst)
+	}
+}
+
+func TestHandlersRevealIPRateLimitDenial(t *testing.T) {
+	ts := newTestServiceWithRateLimit(t, RateLimitConfig{
+		IPBurst:       1,
+		IPInterval:    time.Hour,
+		RevealDenials: true,
+	})
+	handler := ts.service.AuthHandlers()
+
+	if recorder := postLinkForm(handler, url.Values{"email": {"one@example.com"}}.Encode()); recorder.Code != http.StatusAccepted {
+		t.Fatalf("first request status = %d, want %d", recorder.Code, http.StatusAccepted)
+	}
+
+	recorder := postLinkForm(handler, url.Values{"email": {"two@example.com"}}.Encode())
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusTooManyRequests)
+	}
+	if got, want := recorder.Header().Get("Retry-After"), "3600"; got != want {
+		t.Errorf("Retry-After = %q, want %q", got, want)
+	}
+	// The body does not say which limit refused the request.
+	if got := recorder.Body.String(); got != rateLimitResponseBody {
+		t.Errorf("body = %q, want %q", got, rateLimitResponseBody)
+	}
+}
+
+func TestHandlersRevealDenialsLeavesOtherResponsesUniform(t *testing.T) {
+	ts := newTestServiceWithRateLimit(t, RateLimitConfig{RevealDenials: true})
+	handler := ts.service.AuthHandlers()
+
+	recorder := postLinkForm(handler, url.Values{"email": {"not an email"}}.Encode())
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusAccepted)
+	}
+	if got := recorder.Body.String(); got != linkRequestResponseBody {
+		t.Fatalf("body = %q, want %q", got, linkRequestResponseBody)
 	}
 }
 

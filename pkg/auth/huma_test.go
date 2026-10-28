@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -16,8 +17,14 @@ import (
 // Builds a Huma API on the standard library mux and registers the auth routes with it.
 func newHumaTestMux(t *testing.T) (*testService, http.Handler) {
 	t.Helper()
+	return newHumaTestMuxWithRateLimit(t, RateLimitConfig{})
+}
 
-	ts := newTestService(t)
+// Builds a Huma API with the given rate-limit configuration.
+func newHumaTestMuxWithRateLimit(t *testing.T, rateLimit RateLimitConfig) (*testService, http.Handler) {
+	t.Helper()
+
+	ts := newTestServiceWithRateLimit(t, rateLimit)
 	mux := http.NewServeMux()
 	api := humago.New(mux, huma.DefaultConfig("test", "1.0.0"))
 	ts.service.RegisterHumaHandlers(api)
@@ -53,6 +60,37 @@ func TestHumaRequestLinkAcceptsAndSends(t *testing.T) {
 	}
 	if recipients := messages[0].ToRecipients; len(recipients) != 1 || recipients[0] != "user@example.com" {
 		t.Fatalf("recipients = %v, want [user@example.com]", recipients)
+	}
+}
+
+func TestHumaRevealRateLimitDenial(t *testing.T) {
+	_, handler := newHumaTestMuxWithRateLimit(t, RateLimitConfig{RevealDenials: true})
+	body := `{"email":"user@example.com"}`
+
+	for i := range defaultEmailLinkBurst {
+		request := httptest.NewRequest(http.MethodPost, magicLinkRequestPath, strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		recorder := httptest.NewRecorder()
+
+		handler.ServeHTTP(recorder, request)
+
+		if recorder.Code != http.StatusAccepted {
+			t.Fatalf("request %d: status = %d, want %d", i+1, recorder.Code, http.StatusAccepted)
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodPost, magicLinkRequestPath, strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusTooManyRequests)
+	}
+	wantRetryAfter := strconv.Itoa(int(defaultEmailLinkInterval.Seconds()))
+	if got := recorder.Header().Get("Retry-After"); got != wantRetryAfter {
+		t.Errorf("Retry-After = %q, want %q", got, wantRetryAfter)
 	}
 }
 

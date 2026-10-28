@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -33,8 +34,9 @@ func (s *AuthService) RegisterHumaHandlers(api huma.API) {
 		Path:          magicLinkRequestPath,
 		Tags:          []string{"auth"},
 		Summary:       "Request a magic sign-in link",
-		Description:   "Sends a single-use sign-in link to the given email address. The response is deliberately uniform so callers cannot probe address validity, rate limits, or delivery failures.",
+		Description:   "Sends a single-use sign-in link to the given email address. The response is deliberately uniform so callers cannot probe address validity, rate limits, or delivery failures, unless RateLimitConfig.RevealDenials is set.",
 		DefaultStatus: http.StatusAccepted,
+		Errors:        []int{http.StatusTooManyRequests},
 		Middlewares:   huma.Middlewares{s.clientIPMiddleware},
 	}, s.handleHumaRequestLink)
 
@@ -105,12 +107,20 @@ type requestLinkOutput struct {
 	}
 }
 
-// Handles the Huma request-link operation. The response never varies, so it does not act on the result of the request.
+// Handles the Huma request-link operation. The response never varies, so it does not act on the result of the request. Revealed denials are the exception.
 func (s *AuthService) handleHumaRequestLink(ctx context.Context, in *requestLinkInput) (*requestLinkOutput, error) {
 	clientIP, _ := ctx.Value(clientIPContextKey{}).(string)
 
-	// The response below never varies, so the result of the request is deliberately not acted on here.
-	_ = s.requestLink(ctx, in.Body.Email, clientIP)
+	var rateLimited *rateLimitedError
+	if err := s.requestLink(ctx, in.Body.Email, clientIP); s.cfg.RateLimit.RevealDenials && errors.As(err, &rateLimited) {
+		return nil, huma.ErrorWithHeaders(
+			huma.Error429TooManyRequests(rateLimitResponseMessage),
+			http.Header{
+				"Retry-After":   {retryAfterHeader(rateLimited.retryAfter)},
+				"Cache-Control": {"no-store"},
+			},
+		)
+	}
 
 	out := &requestLinkOutput{Status: http.StatusAccepted}
 	out.Body.Status = "accepted"

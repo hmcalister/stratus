@@ -153,7 +153,7 @@ func private(w http.ResponseWriter, r *http.Request) {
 
 | Method | Path | Result |
 | --- | --- | --- |
-| `POST` | `/auth/magic-link` | Accepts a form or JSON `email` field. Always returns `202 Accepted` with the same body. |
+| `POST` | `/auth/magic-link` | Accepts a form or JSON `email` field. Returns `202 Accepted` with the same body, except that a denied request returns `429 Too Many Requests` when `RevealDenials` is set. |
 | `GET` | `/auth/magic-link/consume?token=...` | Consumes the link, sets the session cookie, and redirects to `SuccessURL`. Invalid links get one neutral `400`. |
 | `POST` | `/auth/logout` | Revokes the session in the store, clears the cookie, and returns `204 No Content`. |
 | `POST` | `/auth/logout-all` | Revokes every session for the signed-in user, clears the cookie, and returns `204 No Content`. Requires a valid session. |
@@ -199,6 +199,7 @@ Other methods return `405 Method Not Allowed`.
 | `IPBurst` | `20` | Link requests one client IP may make immediately. |
 | `IPInterval` | `45s` | Time to restore one link request to a client IP's bucket. |
 | `Disabled` | `false` | Turns off link-request rate limiting entirely. |
+| `RevealDenials` | `false` | Answers denied requests with `429` and `Retry-After` instead of the uniform `202`. See [Surfacing denials](#surfacing-denials). |
 
 A zero field keeps its default. Negative values make `auth.New` return an error.
 
@@ -269,6 +270,23 @@ service, err := auth.New(auth.AuthServiceConfig{
 Set `Disabled: true` to turn off link-request rate limiting, for example in tests. The per-IP limit applies only to the built-in HTTP and Huma handlers. `RequestLink` applies the per-address limit.
 
 A request denied by either limit spends no token from the other.
+
+#### Surfacing denials
+
+The built-in handlers deliberately answer every link request the same way. Set `RevealDenials` to answer a denied request with `429 Too Many Requests` and a `Retry-After` header instead:
+
+```go
+service, err := auth.New(auth.AuthServiceConfig{
+	// ...
+	RateLimit: auth.RateLimitConfig{
+		RevealDenials: true,
+	},
+})
+```
+
+`Retry-After` carries whole seconds, rounded up, until the refusing bucket has a token again. The body is the same for both limits, so it does not say which limit refused the request.
+
+Revealing denials lets an unauthenticated caller learn whether an address made recent link requests. Leave the default in place when that matters.
 
 ## SessionStore
 

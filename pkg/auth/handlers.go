@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -17,6 +18,9 @@ const (
 	maxRequestBodyBytes = 1 << 20
 
 	linkRequestResponseBody = "A sign-in link has been sent.\n"
+
+	rateLimitResponseMessage = "Too many sign-in link requests. Try again later."
+	rateLimitResponseBody    = rateLimitResponseMessage + "\n"
 )
 
 // Returns a handler that serves the magic-link routes:
@@ -41,13 +45,26 @@ func (s *AuthService) AuthHandlers() http.Handler {
 }
 
 // Accepts a form or JSON address and answers with the same response no matter what happens, so callers cannot probe address validity, rate limits, or delivery failures.
+//
+// The exception is RateLimitConfig.RevealDenials, which answers a denied request with 429 and Retry-After.
 func (s *AuthService) handleRequestLink(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 
 	email, err := emailFromRequest(r)
 	if err == nil {
-		// The response below never varies, so the result of the request is deliberately not acted on here.
-		_ = s.requestLink(r.Context(), email, s.cfg.ClientIP(r))
+		err = s.requestLink(r.Context(), email, s.cfg.ClientIP(r))
+	}
+
+	// The response below never varies, except when denials are revealed.
+	var rateLimited *rateLimitedError
+	if s.cfg.RateLimit.RevealDenials && errors.As(err, &rateLimited) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Retry-After", retryAfterHeader(rateLimited.retryAfter))
+		w.WriteHeader(http.StatusTooManyRequests)
+		// The response is committed, so a write error cannot be reported to the client in any useful way.
+		_, _ = io.WriteString(w, rateLimitResponseBody)
+		return
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

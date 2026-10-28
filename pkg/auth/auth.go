@@ -209,8 +209,11 @@ func (s *AuthService) requestLink(ctx context.Context, email, clientIP string) e
 		return err
 	}
 
-	if s.limiter != nil && !s.limiter.Allow(address, clientIP) {
-		return ErrRateLimited
+	if s.limiter != nil {
+		allowed, retryAfter := s.limiter.Allow(address, clientIP)
+		if !allowed {
+			return &rateLimitedError{retryAfter: retryAfter}
+		}
 	}
 
 	rawToken, tokenHash, err := token.New()
