@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"math"
+	"strconv"
 	"time"
 )
 
@@ -35,6 +37,30 @@ type RateLimitConfig struct {
 
 	// Disables link-request rate limiting entirely.
 	Disabled bool
+
+	// Answers denied link requests with 429 Too Many Requests and a Retry-After header,
+	// instead of the uniform 202 Accepted.
+	//
+	// This lets a caller learn whether an address made recent link requests, so leave it
+	// off if that matters.
+	RevealDenials bool
+}
+
+// Returned by requestLink when a rate limit refuses the request. It carries the time until another attempt is allowed.
+type rateLimitedError struct {
+	retryAfter time.Duration
+}
+
+func (e *rateLimitedError) Error() string { return ErrRateLimited.Error() }
+
+func (e *rateLimitedError) Unwrap() error { return ErrRateLimited }
+
+// Returns the Retry-After header value for d.
+//
+// The header carries whole seconds, so the value is rounded up.
+func retryAfterHeader(d time.Duration) string {
+	seconds := max(int64(math.Ceil(d.Seconds())), 1)
+	return strconv.FormatInt(seconds, 10)
 }
 
 // Returns cfg with defaults filled in, or an error when a value is negative.
